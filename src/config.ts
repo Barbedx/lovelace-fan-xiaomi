@@ -9,6 +9,7 @@ interface FanXiaomiCustomConfig {
   disable_animation: boolean;
   force_sleep_mode_support: boolean;
   hide_led_button: boolean;
+  hide_buzzer_button: boolean;
 }
 
 export interface FanXiaomiCardConfig extends LovelaceCardConfig, FanXiaomiCustomConfig {}
@@ -20,4 +21,5 @@ export const defaultConfig: FanXiaomiCustomConfig = {
   disable_animation: false,
   force_sleep_mode_support: false,
   hide_led_button: false,
+  hide_buzzer_button: false,
 };

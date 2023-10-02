@@ -101,6 +101,13 @@ export class FanXiaomiCardEditor extends ScopedRegistryHost(LitElement) implemen
           @change=${this._valueChanged}
         ></mwc-switch>
       </mwc-formfield>
+      <mwc-formfield label="Hide buzzer button (for supported devices)">
+        <mwc-switch
+          .checked=${config.hide_buzzer_button}
+          .configValue=${"hide_buzzer_button"}
+          @change=${this._valueChanged}
+        ></mwc-switch>
+      </mwc-formfield>
     `;
   }
 

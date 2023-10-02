@@ -24,6 +24,7 @@ type SupportedAttributes = {
   supportedAngles: number[];
   sleepMode: boolean;
   led: boolean;
+  buzzer: boolean;
   speedIncreaseDecreaseButtons: boolean;
 };
 
@@ -33,7 +34,7 @@ type DeviceEntities = {
   childLock?: string;
   ledNumber?: string;
   ledSelect?: string;
-  ledSwitch?: string;
+  ledSwitch?: string; 
   temperature?: string;
   humidity?: string;
   powerSupply?: string;
@@ -140,6 +141,7 @@ export class FanXiaomiCard extends LitElement {
     supportedAngles: [30, 60, 90, 120],
     sleepMode: false,
     led: false,
+    buzzer:false,
     speedIncreaseDecreaseButtons: false,
   };
 
@@ -284,7 +286,21 @@ export class FanXiaomiCard extends LitElement {
     return attrs["mode"]?.toLowerCase();
   }
 
+  private setBuzzer(on: boolean){ 
+    this.hass.callService(this.config.platform, on ? "fan_set_buzzer_on" : "fan_set_buzzer_off", {
+      entity_id: this.config.entity,
+    });
+  }
+
+  private getBuzzer() {
+    const attrs = this.hass.states[this.config.entity].attributes; 
+    return attrs["buzzer"];
+  }
+
   private setLed(on: boolean) {
+
+   
+
     if (this.deviceEntities.ledNumber) {
       this.hass.callService("number", "set_value", {
         entity_id: this.deviceEntities.ledNumber,
@@ -306,9 +322,18 @@ export class FanXiaomiCard extends LitElement {
         });
       }
     } else {
-      this.hass.callService(this.config.platform, on ? "fan_set_led_on" : "fan_set_led_off", {
-        entity_id: this.config.entity,
-      });
+      
+      const brightness =  this.hass.states[this.config.entity].attributes["led_brightness"]
+      if(brightness){
+        this.hass.callService(this.config.platform, on ? "fan_set_led_on" : "fan_set_led_off", {
+          entity_id: this.config.entity,
+        }); 
+      } else {
+        this.hass.callService(this.config.platform, "fan_set_led_brightness", {
+          entity_id: this.config.entity,
+          brightness: on ? 0 : 2
+        });
+      }
     }
   }
 
@@ -320,7 +345,11 @@ export class FanXiaomiCard extends LitElement {
     } else if (this.deviceEntities.ledSwitch) {
       return this.hass.states[this.deviceEntities.ledSwitch].state === "on";
     }
-    return this.hass.states[this.config.entity].attributes["led_brightness"] < 2;
+    const brightness =  this.hass.states[this.config.entity].attributes["led_brightness"] ;
+    if(brightness)
+      return brightness < 2;
+    else 
+      return this.hass.states[this.config.entity].attributes["led"];
   }
 
   private getTemperature() {
@@ -348,6 +377,7 @@ export class FanXiaomiCard extends LitElement {
     const allEntities = await this.hass.callWS<{ entity_id: string; device_id: string }[]>({
       type: "config/entity_registry/list",
     });
+    
     const fanApiEntity = allEntities.find((e) => e.entity_id === this.config.entity);
     if (!fanApiEntity) {
       return {};
@@ -435,6 +465,8 @@ export class FanXiaomiCard extends LitElement {
         this.supportedAttributes.speedLevels = 3;
         this.supportedAttributes.angle = false;
         this.supportedAttributes.rotationAngle = false;
+        this.supportedAttributes.buzzer = true;
+        this.supportedAttributes.led = true;
       }
       if (["leshow.fan.ss4"].includes(attrs["model"])) {
         this.supportedAttributes.angle = false;
@@ -493,7 +525,7 @@ export class FanXiaomiCard extends LitElement {
   }
 
   private renderContent(): TemplateResult {
-    const state = this.hass.states[this.config.entity];
+    const state = this.hass.states[this.config.entity]; 
 
     const speed_percentage = this.getSpeedPercentage();
     const child_lock = this.getChildLock();
@@ -506,8 +538,9 @@ export class FanXiaomiCard extends LitElement {
     const temperature = this.getTemperature();
     const humidity = this.getHumidity();
     const power_supply = this.getPowerSupply();
-
+    const buzzer = this.getBuzzer();
     const speedLevel = this.getSpeedLevel();
+
 
     return html` <div class="fan-xiaomi-panel" @click=${(ev) => ev.stopPropagation()}>
       ${this.config.disable_animation
@@ -555,6 +588,22 @@ export class FanXiaomiCard extends LitElement {
           ? html`<div class="attr button-childlock" @click=${this.toggleChildLock}>
               <p class="attr-title">Child Lock</p>
               <p class="attr-value var-childlock">${child_lock ? "On" : "Off"}</p>
+            </div>`
+          : ""}
+        ${this.supportedAttributes.buzzer && !this.config.hide_buzzer_button
+          ? html`<div class="attr button-buzzer" @click=${this.toggleBuzzer}>
+              <p class="attr-title">Buzzer</p>
+              <p class="attr-value var-buzzer">
+                <ha-icon icon="${buzzer ? "mdi:volume-high":"mdi:volume-off"}"></ha-icon>
+              </p> 
+            </div>`
+          : ""}
+        ${this.supportedAttributes.led && !this.config.hide_led_button
+          ? html`<div class="attr button-led" @click=${this.toggleLed}>
+              <p class="attr-title">LED</p>
+              <p class="attr-value var-buzzer">
+                <ha-icon icon="${led ? "mdi:alarm-light-outline":"mdi:alarm-light-off-outline"}"></ha-icon>
+              </p> 
             </div>`
           : ""}
         ${this.supportedAttributes.angle
@@ -628,16 +677,6 @@ export class FanXiaomiCard extends LitElement {
                   <ha-icon icon="mdi:power-sleep"></ha-icon>
                 </span>
                 Sleep
-              </button>
-            </div>`
-          : ""}
-        ${this.supportedAttributes.led && !this.config.hide_led_button
-          ? html`<div class="op var-led ${led ? "active" : ""}" @click=${this.toggleLed}>
-              <button>
-                <span class="icon-waper">
-                  <ha-icon icon="mdi:lightbulb-outline"></ha-icon>
-                </span>
-                LED
               </button>
             </div>`
           : ""}
@@ -758,6 +797,11 @@ export class FanXiaomiCard extends LitElement {
   private toggleLed() {
     const currentlOn = this.getLed();
     this.setLed(!currentlOn);
+  }
+
+  private toggleBuzzer() {
+    const currentBuzzer = this.getBuzzer();
+    this.setBuzzer(!currentBuzzer);
   }
 
   private toggleOscillation() {
